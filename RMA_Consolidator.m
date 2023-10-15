@@ -81,10 +81,12 @@ function [proc_occupied, tasks_on_proc, proc_util, proc_allocated, ...
 
             %% prune loose bins and re-arrange results
             [proc_id_tmp, proc_util_tmp] = prune_loose_bins(proc_id_tmp, proc_util_tmp, 2 * (sqrt(2) - 1));
-		    proc_util(proc_occupied + 1 : proc_occupied + size(proc_util_tmp,1)) = proc_util_tmp;
-            proc_id_tmp(proc_id_tmp > 0) = proc_id_tmp(proc_id_tmp > 0) + proc_occupied;
-            proc_allocated(task_id_in_group) = proc_id_tmp;
-            proc_occupied = proc_occupied + size(proc_util_tmp,1);
+            if (~isempty(proc_util_tmp))
+                proc_util(proc_occupied + 1 : proc_occupied + size(proc_util_tmp,1)) = proc_util_tmp;
+                proc_id_tmp(proc_id_tmp > 0) = proc_id_tmp(proc_id_tmp > 0) + proc_occupied;
+                proc_allocated(task_id_in_group) = proc_id_tmp;
+                proc_occupied = proc_occupied + size(proc_util_tmp,1);
+            end
         end
 	end
 	
@@ -104,13 +106,17 @@ function [proc_occupied, tasks_on_proc, proc_util, proc_allocated, ...
         tasks_to_shrink = find(proc_allocated > proc_lim);
         proc_allocated(tasks_to_shrink) = 0;
         shrink_factor = sum(task_util(tasks_to_shrink, :), 1)./sum(task_util, 1);
+        proc_occupied = proc_lim;
     else
         proc_util(proc_occupied + 1 : proc_occupied + size(proc_util_tmp,1)) = proc_util_tmp;
         proc_occupied = proc_occupied + size(proc_util_tmp,1);
     end
-    
+
     tasks_on_proc = cell(proc_occupied, 1);
     for i = 1 : n_tasks
+        if (proc_allocated(i) == 0)
+            continue;
+        end
         tasks_on_proc{proc_allocated(i)}(end + 1) = i;
     end
     
