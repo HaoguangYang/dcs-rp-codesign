@@ -7,17 +7,14 @@
 %
 % output:
 % RowBlock: block-ified sub-matrices by row
-% split: number of rows in each sub-matrices
 
-function [RowBlock, split] = Demultiplexor(K, nBlock)
-	[KRow, KCol] = size(K);
+function RowBlock = Demultiplexor(K, nBlock)
+	[KRow, ~] = size(K);
 	unit_size = KRow/nBlock;
-	RowBlock = zeros(nBlock, KCol*ceil(unit_size));
-	split = zeros(1,nBlock);
+    RowBlock = cell(nBlock, 1);
     for i = 1:nBlock
 		UBound = round(i*unit_size);
 		LBound = round((i-1)*unit_size);
-		split(i) = UBound-LBound;
-		RowBlock(i,:) = reshape(K(LBound+1:UBound,:),1,[]);
+		RowBlock{i, 1} = K(LBound+1:UBound,:);
     end
 end
