@@ -13,7 +13,7 @@ clear all;
 clc;
 close all;
 
-max_num_of_processors = 1;
+max_num_of_processors = 17;
 max_acceptable_performance_degrade_ratio = 0.05;
 download_to_hardware = false;
 
@@ -22,7 +22,7 @@ load('humanInTheLoopTest.mat');
 
 % hardware capacity profile
 load('zynq_7000_spmv_capacity_profile.mat', 'wcet_table');
-reserved_util = 0.1;
+reserved_util = 0.30;
 
 max_iter = 100;
 
@@ -32,17 +32,15 @@ unfulfilled_tasks = [];                      	% For initializing the loop
 gamma = 0;
 soln = H2sparse(A,Bd,B,Q,R,gamma);
 K = soln.F;
-n_tasks = size(K, 1);
-num_disturbance 	= size(Bd,2);
-num_output			= size(B,2);
+n_tasks = size(B,2);
 soln_dense_opt = soln;
 
 iter = 1;
 while (true)
-    % Demultiplexor, adopt as necessary
+    % Demultiplexor by rows
     blockified_tasks = Demultiplexor(K, n_tasks);
 
-    % ET_Estimator, takes in reshaped K matrix (1*x) (blockified_tasks)
+    % ET_Estimator, takes in blockified_tasks and HW capacity profile
     ET = ET_Estimator(blockified_tasks, wcet_table);
 
     % RMA Consolidator, Feed Back: tasks should be simplified a total factor
@@ -81,6 +79,7 @@ while (true)
                 iter = 1;
                 gamma = 0;
                 K = soln_dense_opt.F;
+                soln = soln_dense_opt;
                 continue;
             else
                 break;
@@ -98,7 +97,7 @@ end
 
 % TRANSFER DATA TO HARDWARE
 disp ('Initializing Hardware...');
-%%%%%%%%%%%%%%%%% NETWORKING INTERFACE 5%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%% NETWORKING INTERFACE %%%%%%%%%%%%%%%%%%
 % >>SEND
 % 2*uint16_t            [n_tasks, NumPeriods]
 % 2*uint32_t			bufferSize{send, recv};
@@ -129,11 +128,11 @@ for i = 1:max_num_of_processors
     fopen(PubComm(i));
     % Number of Public Port equals number of total nodes, each sending their corresponding task indexes.
     % Public port may only have buffer size of 512.
-    tcpwrite(PubComm(i), uint16([length(tasks_on_proc{i}) 1]),512);    % Modify NumPeriods (1) here for future development.
+    network_stream_write(PubComm(i), uint16([length(tasks_on_proc{i}) 1]),512);    % Modify NumPeriods (1) here for future development.
     
-    clientBufSize = tcpread(PubComm, 8, 512, 'uint32');
+    clientBufSize = network_stream_read(PubComm, 8, 512, 'uint32');
     % Task-specific ports have buffer size 65535.
-    tcpwrite(PubComm, uint32([65535, 65535]),512);
+    network_stream_write(PubComm, uint32([65535, 65535]),512);
     bufSize(1) = min(uint32(65535), clientBufSize(2));
     bufSize(2) = min(uint32(65535), clientBufSize(1));
 end
@@ -168,6 +167,11 @@ for i = 1:n_tasks
     % Write Dense matrix through socket
     % network_stream_write(comm(i), reshape(BKEq',1,[]), bufSize(1));
     fprintf ('Task %d initialized.\n',i);
+end
+% size of result from each task
+nRow = zeros(n_tasks, 1);
+for i = 1:n_tasks
+    nRow(i) = size(blockified_tasks{i,1}, 1);
 end
 
 % Tasks run on node with release time = 0 and frequency = 25Hz, refer to
